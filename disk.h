@@ -1,10 +1,11 @@
+// disk.h
 #ifndef DISK_H
 #define DISK_H
 
-int make_disk(char *name); // Or create_disk(), pick one
-int open_disk(char *name);
+int make_disk(const char *name, int n);
+int open_disk(const char *name, int n);
+int read_sector(int sector, char *buffer);
+int write_sector(int sector, const char *buffer);
 int close_disk();
-int block_write(int block, char *buf);
-int block_read(int block, char *buf);
 
-#endif
+#endif // DISK_H

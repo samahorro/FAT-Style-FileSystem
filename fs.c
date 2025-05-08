@@ -1,42 +1,99 @@
-#include "disk.h"
+// fs.c
 #include "fs.h"
+#include "disk.h"
+#include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
-SuperBlock sb;
-int fat[BLOCK_COUNT];
-DirectoryEntry dir[MAX_FILES];
-FileDescriptor fd_table[MAX_FD];
+#define MAX_FILES 128
+#define MAX_FILENAME 32
+#define MAX_FILE_SIZE 8192
+#define SECTOR_SIZE 512
+#define FS_MAGIC 0x12345678
 
-// block below will create a disk and then initialize it.
-int make_(char *name) {
-    if (make_disk(name) == -1) return -1;
-    if (open_disk(name) == -1) return -1;
+typedef struct
+{
+    char name[MAX_FILENAME];
+    int size;
+    int start_sector;
+    int in_use;
+} FileEntry;
 
-    sb.fat_start = 1;
-    sb.dir_start = 17;
-    sb.data_start = 81;
+typedef struct
+{
+    int magic;
+    FileEntry files[MAX_FILES];
+    char bitmap[SECTOR_SIZE];
+} SuperBlock;
 
-    for (int i = 0; i < BLOCK_COUNT; i++) fat[i] = -1;
-    for (int i = 0; i < MAX_FILES; i++) dir[i].used = 0;
+static SuperBlock superblock;
 
-    char buf[BLOCK_SIZE];
-    memcpy(buf, &sb, sizeof(sb));
-    block_write(0, buf);
+int fs_format()
+{
+    memset(&superblock, 0, sizeof(SuperBlock));
+    superblock.magic = FS_MAGIC;
 
-    for (int i = 0; i < 16; i++) {
-        memcpy(buf, fat + i * 1024, BLOCK_SIZE);
-        block_write(sb.fat_start + i, buf);
+    char zero[SECTOR_SIZE] = {0};
+    for (int i = 1; i < 1024; ++i)
+    {
+        write_sector(i, zero);
     }
 
-    for (int i = 0; i < 4; i++) {
-        memcpy(buf, dir + i * 16, BLOCK_SIZE);
-        block_write(sb.dir_start + i, buf);
-    }
+    return write_sector(0, (char *)&superblock);
+}
 
-    close_disk();
+int fs_mount()
+{
+    if (read_sector(0, (char *)&superblock) < 0 || superblock.magic != FS_MAGIC)
+        return -1;
     return 0;
 }
 
-// mount to load disk into memory
+int fs_create(const char *name)
+{
+    if (!name || strlen(name) >= MAX_FILENAME)
+        return -1;
 
-// umount_ to save memory onto disk
+    for (int i = 0; i < MAX_FILES; ++i)
+    {
+        if (superblock.files[i].in_use && strcmp(superblock.files[i].name, name) == 0)
+            return -1;
+    }
+
+    for (int i = 0; i < MAX_FILES; ++i)
+    {
+        if (!superblock.files[i].in_use)
+        {
+            strcpy(superblock.files[i].name, name);
+            superblock.files[i].size = 0;
+            superblock.files[i].start_sector = -1;
+            superblock.files[i].in_use = 1;
+            return write_sector(0, (char *)&superblock);
+        }
+    }
+
+    return -1;
+}
+
+int fs_delete(const char *name)
+{
+    for (int i = 0; i < MAX_FILES; ++i)
+    {
+        if (superblock.files[i].in_use && strcmp(superblock.files[i].name, name) == 0)
+        {
+            superblock.files[i].in_use = 0;
+            return write_sector(0, (char *)&superblock);
+        }
+    }
+    return -1;
+}
+
+int fs_list()
+{
+    for (int i = 0; i < MAX_FILES; ++i)
+    {
+        if (superblock.files[i].in_use)
+            printf("%s\n", superblock.files[i].name);
+    }
+    return 0;
+}

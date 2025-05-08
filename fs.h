@@ -2,6 +2,7 @@
 #define FS_H
 
 #include <stddef.h>
+#include <sys/types.h>
 
 // File system constants
 #define MAX_FILES 64
@@ -11,20 +12,23 @@
 #define MAX_FILE_SIZE (4096 * BLOCK_SIZE)
 
 // Data structures
-typedef struct {
+typedef struct
+{
     // Superblock and file system metadata
-    int root_dir_block;  // Block number where the root directory starts
-    int fat_block;       // Block number where the file allocation table starts
+    int root_dir_block; // Block number where the root directory starts
+    int fat_block;      // Block number where the file allocation table starts
     int free_block_count;
 } superblock_t;
 
-typedef struct {
+typedef struct
+{
     char name[MAX_FILENAME_LEN + 1]; // File name (max 15 characters)
     int size;                        // File size
     int first_block;                 // First data block for the file
 } directory_entry_t;
 
-typedef struct {
+typedef struct
+{
     int file_descriptor;
     int offset;  // File pointer
     int file_id; // The file index in the directory
