@@ -2,11 +2,12 @@
 #ifndef DISK_H
 #define DISK_H
 
-// Disk Operations
-int make_disk(const char *name);
-int open_disk(const char *name);
-int close_disk();
+#include <stddef.h>
 
+// Disk functions prototypes
+int make_disk(const char *name, int n); // Add the 'n' parameter
+int open_disk(const char *name, int n); // Add the 'n' parameter
+int close_disk(void);
 int read_block(int block, char *buffer);
 int write_block(int block, const char *buffer);
 
