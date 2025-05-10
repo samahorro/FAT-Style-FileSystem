@@ -15,20 +15,36 @@ int make_fs(char *disk_name) {
     if (open_disk(disk_name) < 0) { return -1; }
 
     // Initialize superblock
+    memset(&superblock, 0, sizeof(superblock_t));
     superblock.root_dir_block = 1;
     superblock.fat_block = 2;
     superblock.free_block_count = MAX_BLOCKS - 2;
     superblock.magic = FS_MAGIC;
     
     // Write initialized superblock back to disk
-    if (write_block(0, (char *)&superblock) < 0) { return -1; }
+    char buffer[BLOCK_SIZE] = {0};
+    memcpy(buffer, &superblock, sizeof(superblock_t));
 
-    // Initialize directory
-    memset(root_dir, 0, sizeof(root_dir));
-    if (write_block(superblock.root_dir_block, (char *)root_dir) < 0) { return -1; }
+    if (write_block(0, buffer) < 0) { 
+        fprintf(stderr, "Error writing superblock.\n");
+        close_disk();
+        return -1;
+    }
+
+    // Initialize directory and debug printf statement
+    char root_buffer[BLOCK_SIZE] = {0};
+    memcpy(root_buffer, root_dir, sizeof(root_dir));
+    printf("Root directory buffer prepared. Buffer size: %lu bytes\n", sizeof(root_buffer));
+
+    if (write_block(1, root_buffer) < 0) { 
+        fprintf(stderr, "Error writing root directory.\n");
+        close_disk();
+        return -1; 
+    }
 
     // Close disk
     close_disk();
+    printf("Filesystem created successfully.\n");
     return 0;
 }
 
@@ -51,18 +67,23 @@ int mount_fs(char *disk_name) {
         close_disk();
         return -1;
     }
-    
-    memcpy(&superblock, buffer, sizeof(superblock_t));
 
+    // Copy buffer data to superblock
+    memcpy(&superblock, buffer, sizeof(superblock_t));
+    
     // Check for a valid filesystem magic number
     if (superblock.magic != FS_MAGIC) {
-        fprintf(stderr, "Invalid filesystem magic number.\n");
+        fprintf(stderr, "Invalid filesystem magic number: %x\n", superblock.magic);
         close_disk();
         return -1;
     }
 
-    // Load the root directory
-    if (read_block(superblock.root_dir_block, (char *)root_dir) < 0) {
+    // Debug print statement for superblock being loaded
+    printf("Superblock loaded. Free blocks: %d\n", superblock.free_block_count);
+
+    // Read the root directory
+    char root_buffer[BLOCK_SIZE] = {0};
+    if (read_block(1, root_buffer) < 0) {
         fprintf(stderr, "Error reading root directory.\n");
         close_disk();
         return -1;
@@ -88,7 +109,9 @@ int umount_fs(char *disk_name) {
     }
 
     // Write root directory back to disk
-    if (write_block(superblock.root_dir_block, (char *)root_dir) < 0) {
+    char root_buffer[BLOCK_SIZE] = {0};
+    memcpy(root_buffer, root_dir, sizeof(root_dir));
+    if (write_block(1, root_buffer) < 0) {
         fprintf(stderr, "Error writing root directory.\n");
         return -1;
     }
@@ -102,35 +125,22 @@ int umount_fs(char *disk_name) {
     return 0;
 }
 
-int fs_format()
-{
-    memset(&superblock, 0, sizeof(superblock_t));
-    superblock.magic = FS_MAGIC;
-
-    char zero[SECTOR_SIZE] = {0};
-    for (int i = 1; i < 1024; ++i)
-    {
-        write_block(i, zero);
-    }
-
-    return write_block(0, (char *)&superblock);
-}
-
-int fs_create(const char *name)
-{
-    if (!name || strlen(name) >= MAX_FILENAME_LEN)
+int fs_create(const char *name) {
+    if (!fs_mounted) {
+        fprintf(stderr, "Filesystem is not mounted.\n");
         return -1;
-
-    for (int i = 0; i < MAX_FILES; ++i)
-    {
-        if (superblock.files[i].in_use && strcmp(superblock.files[i].name, name) == 0)
-            return -1;
     }
 
-    for (int i = 0; i < MAX_FILES; ++i)
-    {
-        if (!superblock.files[i].in_use)
-        {
+    if (!name || strlen(name) >= MAX_FILENAME_LEN) { return -1; }
+
+    for (int i = 0; i < MAX_FILES; ++i) {
+        if (superblock.files[i].in_use && strcmp(superblock.files[i].name, name) == 0) {
+            return -1;
+        }
+    }
+
+    for (int i = 0; i < MAX_FILES; ++i) {
+        if (!superblock.files[i].in_use) {
             strcpy(superblock.files[i].name, name);
             superblock.files[i].size = 0;
             superblock.files[i].start_sector = -1;
@@ -142,8 +152,12 @@ int fs_create(const char *name)
     return -1;
 }
 
-int fs_delete(const char *name)
-{
+int fs_delete(const char *name) {
+    if (!fs_mounted) {
+        fprintf(stderr, "Filesystem is not mounted.\n");
+        return -1;
+    }
+
     for (int i = 0; i < MAX_FILES; ++i) {
         if (superblock.files[i].in_use && strcmp(superblock.files[i].name, name) == 0){
             superblock.files[i].in_use = 0;
@@ -153,12 +167,10 @@ int fs_delete(const char *name)
     return -1;
 }
 
-int fs_list()
-{
+void fs_list_files() {
     for (int i = 0; i < MAX_FILES; ++i) {
         if (superblock.files[i].in_use) {
             printf("%s\n", superblock.files[i].name);
         }
     }
-    return 0;
 }
