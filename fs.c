@@ -131,24 +131,50 @@ int fs_create(const char *name) {
         return -1;
     }
 
-    if (!name || strlen(name) >= MAX_FILENAME_LEN) { return -1; }
+    printf("Attempting to create file: %s\n", name);
 
-    for (int i = 0; i < MAX_FILES; ++i) {
-        if (superblock.files[i].in_use && strcmp(superblock.files[i].name, name) == 0) {
+    if (!name || strlen(name) >= MAX_FILENAME_LEN) { 
+        fprintf(stderr, "File already exists: %s\n", name);
+        return -1; 
+    }
+
+    for (int i = 0; i < MAX_FILES; i++) {
+        if (root_dir[i].size > 0 && strcmp(root_dir[i].name, name) == 0) {
+            fprintf(stderr, "File already exists: %s\n", name);
             return -1;
         }
     }
 
-    for (int i = 0; i < MAX_FILES; ++i) {
-        if (!superblock.files[i].in_use) {
-            strcpy(superblock.files[i].name, name);
-            superblock.files[i].size = 0;
-            superblock.files[i].start_sector = -1;
-            superblock.files[i].in_use = 1;
-            return write_block(0, (char *)&superblock);
+    for (int i = 0; i < MAX_FILES; i++) {
+        if (root_dir[i].size == 0) {
+            strncpy(root_dir[i].name, name, MAX_FILENAME_LEN);
+            root_dir[i].name[MAX_FILENAME_LEN] = '\0';
+            root_dir[i].size = 0;
+            root_dir[i].first_block = -1;
+
+            printf("File created in slot %d: %s\n", i, root_dir[i].name);
+
+            char root_buffer[BLOCK_SIZE] = {0};
+            memcpy(root_buffer, root_dir, sizeof(root_dir));
+
+            if (write_block(1, root_buffer) < 0) {
+                fprintf(stderr, "Error updating root directory.\n");
+                return -1;
+            }
+
+            printf("Root directory updated on disk.\n");
+            printf("Current root directory state:\n");
+            for (int j = 0; j < MAX_FILES; j++) {
+                if (root_dir[j].size > 0) {
+                    printf("Slot %d: %s, Size: %d\n", j, root_dir[j].name, root_dir[j].size);
+                }
+            }
+
+            return 0;
         }
     }
-
+    
+    fprintf(stderr, "No space left in root directory.\n");
     return -1;
 }
 
