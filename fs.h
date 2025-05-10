@@ -12,7 +12,6 @@
 #define MAX_FILE_SIZE (4096 * BLOCK_SIZE)
 #define FS_MAGIC 0x12345678
 #define SECTOR_SIZE 512
-#define FS_MOUNTED = 0
 
 // Data structures
 typedef struct {
@@ -59,5 +58,6 @@ int fs_write(int fildes, void *buf, size_t nbyte);
 int fs_lseek(int fildes, off_t offset);
 int fs_truncate(int fildes, off_t length);
 int fs_get_filesize(int fildes);
+void fs_list_files();
 
 #endif // FS_H
