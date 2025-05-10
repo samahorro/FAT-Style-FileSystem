@@ -44,7 +44,26 @@ int main()
     printf("Listing files:\n");
     fs_list();
 
-    // Step 5: Delete a file
+    // Step 5: Open the file
+    printf("Opening file 'file1.txt'...\n");
+    int fd = fs_open("file1.txt");
+    if (fd < 0)
+    {
+        fprintf(stderr, "Failed to open 'file1.txt'.\n");
+        return 1;
+    }
+    printf("File 'file1.txt' opened with file descriptor: %d\n", fd);
+
+    // Step 6: Close the file
+    printf("Closing file 'file1.txt'...\n");
+    if (fs_close(fd) != 0)
+    {
+        fprintf(stderr, "Failed to close file descriptor %d.\n", fd);
+        return 1;
+    }
+    printf("File descriptor %d closed successfully.\n", fd);
+
+    // Step 7: Delete a file
     printf("Deleting file 'file1.txt'...\n");
     if (fs_delete("file1.txt") != 0)
     {
@@ -52,11 +71,11 @@ int main()
         return 1;
     }
 
-    // Step 6: List files again after deletion
+    // Step 8: List files again after deletion
     printf("Listing files after deletion:\n");
     fs_list();
 
-    // Step 7: Unmount the filesystem
+    // Step 9: Unmount the filesystem
     printf("Unmounting filesystem...\n");
     if (umount_fs(disk_name) != 0)
     {
