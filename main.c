@@ -1,5 +1,6 @@
 #include "fs.h"
 #include "disk.h"
+#include <stdio.h>
 
 int main() {
     make_fs("disk42");
@@ -11,7 +12,7 @@ int main() {
     fs_create("file3");
 
     umount_fs("disk42");
-    
+
     return 0;
 }
 
