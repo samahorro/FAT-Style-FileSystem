@@ -1,202 +1,73 @@
-// fs.c
-#include "fs.h"
-#include "disk.h"
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#ifndef FS_H
+#define FS_H
 
-static superblock_t superblock;
-static directory_entry_t root_dir[MAX_FILES];
-static file_descriptor_t fd_table[32];
-int fs_mounted = 0;
+#include <stddef.h>
+#include <sys/types.h>
 
-int make_fs(char *disk_name) {
-    if (make_disk(disk_name) < 0) { return -1; }
-    if (open_disk(disk_name) < 0) { return -1; }
+// File system constants
+#define MAX_FILES 64
+#define MAX_FILENAME_LEN 15
+#define BLOCK_SIZE 4096
+#define MAX_BLOCKS 8192
+#define MAX_FILE_SIZE (4096 * BLOCK_SIZE)
+#define FS_MAGIC 0x12345678
+#define SECTOR_SIZE 512
+#define FS_MOUNTED 0
 
-    // Initialize superblock
-    memset(&superblock, 0, sizeof(superblock_t));
-    superblock.root_dir_block = 1;
-    superblock.fat_block = 2;
-    superblock.free_block_count = MAX_BLOCKS - 2;
-    superblock.magic = FS_MAGIC;
-    
-    // Write initialized superblock back to disk
-    char buffer[BLOCK_SIZE] = {0};
-    memcpy(buffer, &superblock, sizeof(superblock_t));
+// Data structures
+typedef struct
+{
+    char name[MAX_FILENAME_LEN]; // File name
+    int size;                    // File size
+    int start_sector;            // First data block for the file
+    int in_use;                  // 1 if file is in use, 0 otherwise
+} FileEntry;
 
-    if (write_block(0, buffer) < 0) { 
-        fprintf(stderr, "Error writing superblock.\n");
-        close_disk();
-        return -1;
-    }
+typedef struct
+{
+    int root_dir_block;         // Block number where the root directory starts
+    int fat_block;              // Block number where the file allocation table starts
+    int free_block_count;       // Number of free blocks
+    int magic;                  // Magic number to verify file system integrity
+    FileEntry files[MAX_FILES]; // Array of file entries (for managing files)
+} superblock_t;
 
-    // Initialize directory and debug printf statement
-    char root_buffer[BLOCK_SIZE] = {0};
-    memcpy(root_buffer, root_dir, sizeof(root_dir));
-    printf("Root directory buffer prepared. Buffer size: %lu bytes\n", sizeof(root_buffer));
+typedef struct
+{
+    char name[MAX_FILENAME_LEN + 1]; // File name (max 15 characters + null terminator)
+    int size;                        // File size
+    int first_block;                 // First data block for the file
+} directory_entry_t;
 
-    if (write_block(1, root_buffer) < 0) { 
-        fprintf(stderr, "Error writing root directory.\n");
-        close_disk();
-        return -1; 
-    }
+typedef struct
+{
+    int file_descriptor; // Index of the open file in the descriptor table
+    int offset;          // Current file pointer
+    int file_id;         // The file's index in the directory
+} file_descriptor_t;
 
-    // Close disk
-    close_disk();
-    printf("Filesystem created successfully.\n");
-    return 0;
-}
+// Flag for filesystem mount status
+extern int fs_mounted;
 
-int mount_fs(char *disk_name) {
-    if (fs_mounted) {
-        fprintf(stderr, "Filesystem already mounted.\n");
-        return -1;
-    }
+// Function prototypes
+int make_fs(const char *disk_name);   // Create a new file system on disk
+int mount_fs(const char *disk_name);  // Mount an existing file system
+int umount_fs(const char *disk_name); // Unmount the file system
 
-    if (open_disk(disk_name) < 0) {
-        fprintf(stderr, "Error opening disk.\n");
-        return -1;
-    }
+int fs_create(const char *name);                         // Create a new file
+int fs_delete(const char *name);                         // Delete a file
+int fs_open(const char *name);                           // Open a file
+int fs_close(int fildes);                                // Close a file
+int fs_read(int fildes, void *buf, size_t nbyte);        // Read data from a file
+int fs_write(int fildes, const void *buf, size_t nbyte); // Write data to a file
+int fs_lseek(int fildes, off_t offset);                  // Seek to a specific position in a file
+int fs_truncate(int fildes, off_t length);               // Truncate a file to a specific size
+int fs_get_filesize(int fildes);                         // Get the size of a file
 
-    char buffer[BLOCK_SIZE];
+int fs_list(); // List all files in the file system
 
-    // Read the superblock
-    if (read_block(0, buffer) < 0) {
-        fprintf(stderr, "Error reading superblock.\n");
-        close_disk();
-        return -1;
-    }
+// Disk functions (moved to fs.h from disk.c to avoid implicit declaration errors)
+int read_block(int block, char *buffer);        // Read a block from disk
+int write_block(int block, const char *buffer); // Write a block to disk
 
-    // Copy buffer data to superblock
-    memcpy(&superblock, buffer, sizeof(superblock_t));
-    
-    // Check for a valid filesystem magic number
-    if (superblock.magic != FS_MAGIC) {
-        fprintf(stderr, "Invalid filesystem magic number: %x\n", superblock.magic);
-        close_disk();
-        return -1;
-    }
-
-    // Debug print statement for superblock being loaded
-    printf("Superblock loaded. Free blocks: %d\n", superblock.free_block_count);
-
-    // Read the root directory
-    char root_buffer[BLOCK_SIZE] = {0};
-    if (read_block(1, root_buffer) < 0) {
-        fprintf(stderr, "Error reading root directory.\n");
-        close_disk();
-        return -1;
-    }
-
-    fs_mounted = 1;
-    return 0;
-}
-
-int umount_fs(char *disk_name) {
-    if (!fs_mounted) {
-        fprintf(stderr, "No filesystem is currently mounted.\n");
-        return -1;
-    }
-
-    char buffer[BLOCK_SIZE];
-
-    // Write the superblock back to disk
-    memcpy(buffer, &superblock, sizeof(superblock_t));
-    if (write_block(0, buffer) < 0) {
-        fprintf(stderr, "Error writing superblock.\n");
-        return -1;
-    }
-
-    // Write root directory back to disk
-    char root_buffer[BLOCK_SIZE] = {0};
-    memcpy(root_buffer, root_dir, sizeof(root_dir));
-    if (write_block(1, root_buffer) < 0) {
-        fprintf(stderr, "Error writing root directory.\n");
-        return -1;
-    }
-    
-    if (close_disk() < 0) {
-        fprintf(stderr, "Error closing disk.\n");
-        return -1;
-    }
-
-    fs_mounted = 0;
-    return 0;
-}
-
-int fs_create(const char *name) {
-    if (!fs_mounted) {
-        fprintf(stderr, "Filesystem is not mounted.\n");
-        return -1;
-    }
-
-    printf("Attempting to create file: %s\n", name);
-
-    if (!name || strlen(name) >= MAX_FILENAME_LEN) { 
-        fprintf(stderr, "File already exists: %s\n", name);
-        return -1; 
-    }
-
-    for (int i = 0; i < MAX_FILES; i++) {
-        if (root_dir[i].size > 0 && strcmp(root_dir[i].name, name) == 0) {
-            fprintf(stderr, "File already exists: %s\n", name);
-            return -1;
-        }
-    }
-
-    for (int i = 0; i < MAX_FILES; i++) {
-        if (root_dir[i].size == 0) {
-            strncpy(root_dir[i].name, name, MAX_FILENAME_LEN);
-            root_dir[i].name[MAX_FILENAME_LEN] = '\0';
-            root_dir[i].size = 0;
-            root_dir[i].first_block = -1;
-
-            printf("File created in slot %d: %s\n", i, root_dir[i].name);
-
-            char root_buffer[BLOCK_SIZE] = {0};
-            memcpy(root_buffer, root_dir, sizeof(root_dir));
-
-            if (write_block(1, root_buffer) < 0) {
-                fprintf(stderr, "Error updating root directory.\n");
-                return -1;
-            }
-
-            printf("Root directory updated on disk.\n");
-            printf("Current root directory state:\n");
-            for (int j = 0; j < MAX_FILES; j++) {
-                if (root_dir[j].size > 0) {
-                    printf("Slot %d: %s, Size: %d\n", j, root_dir[j].name, root_dir[j].size);
-                }
-            }
-
-            return 0;
-        }
-    }
-    
-    fprintf(stderr, "No space left in root directory.\n");
-    return -1;
-}
-
-int fs_delete(const char *name) {
-    if (!fs_mounted) {
-        fprintf(stderr, "Filesystem is not mounted.\n");
-        return -1;
-    }
-
-    for (int i = 0; i < MAX_FILES; ++i) {
-        if (superblock.files[i].in_use && strcmp(superblock.files[i].name, name) == 0){
-            superblock.files[i].in_use = 0;
-            return write_block(0, (char *)&superblock);
-        }
-    }
-    return -1;
-}
-
-void fs_list_files() {
-    for (int i = 0; i < MAX_FILES; ++i) {
-        if (superblock.files[i].in_use) {
-            printf("%s\n", superblock.files[i].name);
-        }
-    }
-}
+#endif // FS_H
