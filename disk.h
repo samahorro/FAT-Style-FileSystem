@@ -2,10 +2,12 @@
 #ifndef DISK_H
 #define DISK_H
 
+// Disk Operations
 int make_disk(const char *name, int n);
 int open_disk(const char *name, int n);
-int read_sector(int sector, char *buffer);
-int write_sector(int sector, const char *buffer);
 int close_disk();
+
+int read_block(int sector, char *buffer);
+int write_block(int sector, const char *buffer);
 
 #endif // DISK_H
