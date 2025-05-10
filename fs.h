@@ -13,8 +13,7 @@
 
 // Data structures
 typedef struct
-{
-    // Superblock and file system metadata
+{   
     int root_dir_block; // Block number where the root directory starts
     int fat_block;      // Block number where the file allocation table starts
     int free_block_count;
