@@ -1,9 +1,10 @@
 #include "fs.h"
+#include "disk.h"
 
 int main() {
-    make("disk42");
-    mount("disk42");
-    umount("disk42");
+    make_fs("disk42");
+    mount_fs("disk42");
+    umount_fs("disk42");
     return 0;
 }
 

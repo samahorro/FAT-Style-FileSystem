@@ -43,14 +43,30 @@ int close_disk() {
     return -1;
 }
 
-int block_write(int block, const char *buf) {
+int read_block(int block, char *buffer) {
     if (disk_file == NULL) {
         fprintf(stderr, "Disk is not open!\n");
         return -1;
     }
 
     fseek(disk_file, block * BLOCK_SIZE, SEEK_SET);
-    size_t written = fwrite(buf, sizeof(char), BLOCK_SIZE, disk_file);
+    size_t read_bytes = fread(buffer, sizeof(char), BLOCK_SIZE, disk_file);
+
+    if (read_bytes != BLOCK_SIZE) {
+        perror("Error reading from block");
+        return -1;
+    }
+    return 0;
+}
+
+int write_block(int block, const char *buffer) {
+    if (disk_file == NULL) {
+        fprintf(stderr, "Disk is not open!\n");
+        return -1;
+    }
+
+    fseek(disk_file, block * BLOCK_SIZE, SEEK_SET);
+    size_t written = fwrite(buffer, sizeof(char), BLOCK_SIZE, disk_file);
     
     if (written != BLOCK_SIZE) {
         perror("Error writing to block");
@@ -59,18 +75,4 @@ int block_write(int block, const char *buf) {
     return 0;
 }
 
-int block_read(int block, char *buf) {
-    if (disk_file == NULL) {
-        fprintf(stderr, "Disk is not open!\n");
-        return -1;
-    }
 
-    fseek(disk_file, block * BLOCK_SIZE, SEEK_SET);
-    size_t read_bytes = fread(buf, sizeof(char), BLOCK_SIZE, disk_file);
-
-    if (read_bytes != BLOCK_SIZE) {
-        perror("Error reading from block");
-        return -1;
-    }
-    return 0;
-}
